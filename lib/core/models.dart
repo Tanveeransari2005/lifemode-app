@@ -40,8 +40,6 @@ class LifeConfig {
   final int overrideUntilMs;
   // Driving
   final List<String> blockDriving;
-  final bool autoReply;
-  final String autoReplyText;
   final int drivingSpeedKmh;
   // Study
   final List<String> blockStudy;
@@ -70,8 +68,6 @@ class LifeConfig {
     this.overrideMode = '',
     this.overrideUntilMs = 0,
     this.blockDriving = const ['com.instagram.android', 'com.google.android.youtube'],
-    this.autoReply = true,
-    this.autoReplyText = 'Main drive kar rahi hoon, baad me baat karti hoon.',
     this.drivingSpeedKmh = 20,
     this.blockStudy = const ['com.instagram.android', 'com.google.android.youtube', 'com.snapchat.android'],
     this.studySlots = const [],
@@ -117,8 +113,6 @@ class LifeConfig {
         'overrideMode': overrideMode,
         'overrideUntilMs': overrideUntilMs,
         'blockDriving': blockDriving,
-        'autoReply': autoReply,
-        'autoReplyText': autoReplyText,
         'drivingSpeedKmh': drivingSpeedKmh,
         'blockStudy': blockStudy,
         'studySlots': [for (final s in studySlots) s.toJson()],
@@ -156,8 +150,6 @@ class LifeConfig {
       overrideMode: (j['overrideMode'] ?? '').toString(),
       overrideUntilMs: i(j['overrideUntilMs'], 0),
       blockDriving: strs(j['blockDriving'], d.blockDriving),
-      autoReply: j['autoReply'] != false,
-      autoReplyText: (j['autoReplyText'] ?? d.autoReplyText).toString(),
       drivingSpeedKmh: i(j['drivingSpeedKmh'], d.drivingSpeedKmh),
       blockStudy: strs(j['blockStudy'], d.blockStudy),
       studySlots: j['studySlots'] is List

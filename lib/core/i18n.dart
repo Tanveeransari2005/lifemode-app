@@ -8,6 +8,9 @@ class T {
   bool get hi => lang != 'en';
   String s(String hinglish, String english) => hi ? hinglish : english;
 
+  /// LifeMode Lite (v1.0.1) has no NotificationListener, so no driving auto-reply.
+  static const liteNoAutoReply = 'Auto-reply Lite version mein nahi hai';
+
   String modeName(LifeMode m) => switch (m) {
         LifeMode.driving => s('Driving', 'Driving'),
         LifeMode.study => s('Padhai', 'Study'),
@@ -17,8 +20,8 @@ class T {
       };
 
   String modeTagline(LifeMode m) => switch (m) {
-        LifeMode.driving => s('Road pe dhyan. Apps blocked, auto-reply on.',
-            'Eyes on the road. Apps blocked, auto-reply on.'),
+        LifeMode.driving => s('Road pe dhyan. Apps blocked, Maps ready.',
+            'Eyes on the road. Apps blocked, Maps ready.'),
         LifeMode.study => s('Focus time. Social apps blocked, timer ready.',
             'Focus time. Social apps blocked, timer ready.'),
         LifeMode.sleep => s('Phone shaant hai. Sirf starred contacts aur repeat calls.',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n.dart';
 import '../../core/models.dart';
 import '../../state/app_state.dart';
 import '../../platform/native_bridge.dart';
@@ -46,12 +47,8 @@ class SettingsScreen extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.quickreply_rounded),
-              title: Text(t.s('Auto-reply message', 'Auto-reply message')),
-              subtitle: Text(c.autoReplyText),
-              onTap: () async {
-                final v = await _editText(context, t.s('Auto-reply message', 'Auto-reply message'), c.autoReplyText);
-                if (v != null && v.trim().isNotEmpty) s.update({'autoReplyText': v.trim()});
-              },
+              title: Text(t.s('Auto-reply', 'Auto-reply')),
+              subtitle: Text(T.liteNoAutoReply),
             ),
             ListTile(
               leading: const Icon(Icons.speed_rounded),

@@ -37,8 +37,7 @@ class Brain {
     switch (d.mode) {
       case LifeMode.driving:
         title = t.s('Driving Mode on', 'Driving Mode on');
-        body = t.s('Apps blocked, auto-reply ${cfg.autoReply ? 'on' : 'off'}. Maps ek tap pe.',
-            'Apps blocked, auto-reply ${cfg.autoReply ? 'on' : 'off'}. Maps is one tap away.');
+        body = t.s('Apps blocked. Maps ek tap pe.', 'Apps blocked. Maps is one tap away.');
         lines.add(t.s('Calls: speaker ya Bluetooth khud on karein (Android allow nahi karta).',
             'Calls: turn on speaker or Bluetooth yourself (Android does not allow apps to).'));
       case LifeMode.study:

@@ -1,7 +1,7 @@
 name: lifemode
 description: "LifeMode — ambient context app: your phone switches into Driving / Study / Sleep / Home mode by itself."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.13.7

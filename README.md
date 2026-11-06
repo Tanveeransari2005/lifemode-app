@@ -4,6 +4,24 @@
 
 UI in **Hinglish** (default) or **English**, switchable from the header.
 
+> **v1.0.1 "Lite".** Google Play Protect's *enhanced fraud protection* (India) blocks
+> apps installed from a browser, WhatsApp or a file manager when they declare
+> `RECEIVE_SMS`, `READ_SMS`, a Notification Listener or an Accessibility service.
+> The Lite build drops all of these so the APK installs from Chrome without that block,
+> and upgrades over v1.0 (same package `com.tanveer.lifemode`, same signing key).
+>
+> **Removed in Lite**
+> - **Driving auto-reply** to WhatsApp/Instagram (needed `NotificationListenerService`). Driving now shows *"Auto-reply Lite version mein nahi hai"*.
+> - **Optional Accessibility blocker** (instant blocked-app detection). Blocking now uses UsageStats polling only (about 1.5 s delay).
+>
+> Never requested (and stripped with `tools:node="remove"` if a library tries to add them):
+> SMS read/receive/send, call log, phone state, `QUERY_ALL_PACKAGES` (app list comes from `<queries>` intents),
+> `REQUEST_INSTALL_PACKAGES`. The family message is still a prefilled WhatsApp/SMS intent: you press send, no permission needed.
+>
+> `SYSTEM_ALERT_WINDOW` ("Display over other apps") is **kept, and optional**: Android 10+ does not let a
+> background service open an Activity (our own full-screen block screen) without it. No overlay window is drawn.
+> Without it, a blocked app triggers a high-priority notification that opens the block screen instead.
+
 <p align="center"><img src="docs/screenshots/00_icons.png" width="640" alt="Launcher icon: morning, afternoon, evening, night"></p>
 
 | Onboarding | Driving | Study | Sleep | Home (English) | Toggles | Settings |
@@ -16,7 +34,7 @@ Each mode has notification control, app blocking (or a reminder), a smart action
 
 | Mode | Detected from | What it does |
 |---|---|---|
-| **Driving** | Play Services Activity Recognition **Transition API** (`IN_VEHICLE`), with **GPS speed fallback** (2 samples above 20 km/h). Stays on through 3 min of red lights. | DND (priority: starred contacts + repeat callers). Chosen apps blocked with a full-screen **"Driving Mode on"** shield. **Auto-reply** to WhatsApp / Instagram 1:1 chats via the notification's own Reply action (`RemoteInput`); text is editable, default *"Main drive kar rahi hoon, baad me baat karti hoon."*, once per chat per 15 min. Persistent **Open Google Maps** shortcut. "I'm a passenger" button. |
+| **Driving** | Play Services Activity Recognition **Transition API** (`IN_VEHICLE`), with **GPS speed fallback** (2 samples above 20 km/h). Stays on through 3 min of red lights. | DND (priority: starred contacts + repeat callers). Chosen apps blocked with a full-screen **"Driving Mode on"** shield. *(Auto-reply is not in the Lite build.)* Persistent **Open Google Maps** shortcut. "I'm a passenger" button. |
 | **Study / Padhai** | Calendar event happening now whose title has class / exam / test / study / lecture / lab / padhai / tuition / viva…, your weekly study schedule, or a running focus timer. | Social apps blocked (shield with "Back to focus" / "Open for 2 min"). **Pomodoro** focus timer as a countdown notification. Gentle vibration + nudge when the phone is picked up during focus (max every 5 min). **Daily focus %** = study time not spent in blocked apps (UsageStats). |
 | **Sleep** | Inside your night window + screen off 10 min + phone still (accelerometer) + dark (light sensor). Survives quick 3 am time checks; wakes after 5 min of use. | DND with **starred contacts + repeat callers** (+ alarms). **Alarm readiness** (`AlarmManager.getNextAlarmClock`). **"Kal ke important kaam"** from tomorrow's calendar. "Ab so jao" nudge for late-night scrolling (before Sleep starts). |
 | **Home** | Home **WiFi SSID** or **home geofence** (Play Services Geofencing) / GPS distance, with drift hysteresis. | Notification with **"Main ghar pahunch gayi" → family contact** as a **prefilled WhatsApp/SMS** (you press send; never silent). **Charger reminder** under 40 %. Your own reminders (geyser, gate lock…). |
@@ -43,7 +61,7 @@ Honest limits:
 - **Mic is OFF by default.** When on, it reads 0.5 s of audio into memory every ~2 min, keeps one loudness number (dB) and discards the samples. It never records or saves audio.
 - **Incognito Context Mode**: pause all sensing for 1 h, 4 h or until tomorrow morning; nothing is logged.
 - No location history is stored; only mode changes ("Driving at 08:05, reason …").
-- Auto-reply never reads or stores message text; it only looks at the chat title to skip groups.
+- LifeMode Lite cannot read your notifications or screen at all (no Notification Listener, no Accessibility service).
 - **Export** (JSON via share sheet) and **Delete all data** in Settings.
 
 ## Permissions (each explained in-app, in Hinglish)
@@ -54,19 +72,17 @@ Honest limits:
 | Background location ("Allow all the time") | home geofence keeps working after reboot | optional |
 | Physical activity | Activity Recognition (IN_VEHICLE, WALKING, STILL) | for Driving |
 | Usage access | which app is in front (blocking), focus %, app switching, scrolling | for blocking |
-| Display over other apps | lets the service open the block screen from the background | for blocking |
+| Display over other apps | lets the service open its own block screen from the background (Android 10+); without it you get a notification instead | optional, recommended for blocking |
 | Do Not Disturb access | Sleep/Driving DND (starred + repeat callers) | for DND |
-| Notification access | driving auto-reply via RemoteInput | for auto-reply |
 | Calendar | Study detection, tomorrow's tasks | optional |
 | Ignore battery optimisation | keeps the service alive on Xiaomi/Oppo/Vivo/Samsung | recommended |
-| Accessibility (optional) | instant blocked-app detection (reads only the package name) | optional |
 | Microphone (optional, off) | loudness only | optional |
 
 ## Honest limits
 - **Auto-speakerphone is not possible.** Android only lets the *default dialer* app turn speaker on, so Driving shows a reminder instead ("Calls: speaker ya Bluetooth khud on karein").
 - **DND exceptions**: Android's DND lets apps choose *starred contacts* and *repeat callers*, not an arbitrary contact list. Star your important contacts in the Contacts app.
-- **Auto-reply** depends on WhatsApp/Instagram showing a Reply action in their notification. If a chat is muted or the app changes its notification format, no reply is sent. Group chats are skipped on purpose.
-- **Blocking** without the optional Accessibility service polls UsageStats every 1.5 s, so a blocked app can be visible for about a second before the shield appears.
+- **No auto-reply in Lite.** It needs Notification access, which Play Protect blocks for sideloaded apps in India.
+- **Blocking** polls UsageStats every 1.5 s, so a blocked app can be visible for about a second before the shield appears.
 - **Activity Recognition** can take 30–90 s to report `IN_VEHICLE`. Passengers (bus, cab) are also "in vehicle": use **"I'm a passenger"**.
 - **Battery saver** cannot be turned on by a normal app; LifeMode opens the setting for you.
 - After a **reboot**, Android 14+ does not let a location-type service start in the background without "Allow all the time" location. LifeMode then starts in reduced mode (no GPS) until you open the app once.
@@ -91,8 +107,7 @@ android/app/src/main/kotlin/com/tanveer/lifemode/
                       calendar, UsageStats, mic amplitude; ticks every 20 s; applies DND, blocking, notifications, Pomodoro
   BgEngine.kt         headless FlutterEngine running backgroundMain (same Dart engines as the app)
   Receivers.kt        Activity Transition + Geofence + BOOT_COMPLETED receivers
-  AutoReplyListener.kt   NotificationListenerService (RemoteInput replies)
-  BlockAccessibility.kt  optional AccessibilityService; BlockActivity.kt = full-screen shield
+  BlockActivity.kt    full-screen shield, opened by the UsageStats poll loop (Blocker in ContextService.kt)
   IconSwitcher.kt     activity-alias switching + WorkManager job (also a service watchdog)
   Perms.kt, Notifs.kt, Store.kt, MainActivity.kt
 ```
@@ -111,9 +126,9 @@ flutter build apk --release                     # universal APK, minSdk 24
 Without `android/key.properties` the release build falls back to debug signing.
 
 ## Testing on a device (checklist)
-1. Install, go through onboarding, allow at least Notifications, Location, Physical activity, Usage access, Display over apps, DND access, Notification access.
+1. Install, go through onboarding, allow at least Notifications, Location, Physical activity, Usage access, Display over apps, DND access.
 2. **Home**: Settings → Ghar → "Yahi ghar hai" while at home (saves GPS + WiFi). Leave and come back: the Home notification with "Mummy ko bhejo" should appear.
-3. **Driving**: take a ride; within ~1–2 min the card should show `IN_VEHICLE` or `GPS xx km/h`. Open Instagram → shield. Ask someone to WhatsApp you → auto-reply.
+3. **Driving**: take a ride; within ~1–2 min the card should show `IN_VEHICLE` or `GPS xx km/h`. Open Instagram → shield (or a notification if Display over apps is off).
 4. **Study**: add a calendar event "DBMS class" now, or tap the Padhai chip → open a blocked app → shield; start the 25 min timer.
 5. **Sleep**: at night, screen off 10+ min in a dark room → DND on, alarm line + tomorrow's tasks in the notification.
 6. **Icon**: wait for 12:00/17:00/20:00 with the app closed (or toggle the switch off/on).

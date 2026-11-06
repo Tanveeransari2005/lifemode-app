@@ -1,5 +1,6 @@
 package com.tanveer.lifemode
 
+import android.provider.Settings
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlarmManager
@@ -212,7 +213,7 @@ class ContextService : Service(), SensorEventListener {
         try { sm.unregisterListener(this) } catch (_: Exception) {}
         try { LocationServices.getFusedLocationProviderClient(this).removeLocationUpdates(locCb) } catch (_: Exception) {}
         exitMode(currentMode)
-        Live.autoReplyActive = false; Live.blockList = emptySet()
+        Live.blockList = emptySet()
         pushStatus()
     }
 
@@ -486,8 +487,6 @@ class ContextService : Service(), SensorEventListener {
             "study" -> Store.strList(cfg, "blockStudy").toSet()
             else -> emptySet()
         }
-        Live.autoReplyActive = mode == "driving" && cfg.optBoolean("autoReply", true)
-        Live.autoReplyText = cfg.optString("autoReplyText", "Main drive kar rahi hoon, baad me baat karti hoon.")
         updateCard(r, cfg)
         r.optJSONObject("suggestion")?.let { showSuggestion(it) }
         pushStatus()
@@ -642,7 +641,7 @@ class ContextService : Service(), SensorEventListener {
     // ---------------------------------------------------------------- blocking
     private val pollLoop = object : Runnable {
         override fun run() {
-            if (Live.blockList.isNotEmpty() && screenOn && !BlockAccessibility.connected) {
+            if (Live.blockList.isNotEmpty() && screenOn) {
                 val (fg, _) = usage(60_000L)
                 checkBlocked(this@ContextService, fg)
             }
@@ -655,7 +654,9 @@ class ContextService : Service(), SensorEventListener {
     private fun pushStatus() { val s = Live.status(this); h.post { Live.statusSink?.invoke(s) } }
 }
 
-/** Shared by the poll loop and the optional AccessibilityService. */
+/** Called by the UsageStats poll loop (Lite: no AccessibilityService). Opens our own
+ *  full-screen BlockActivity. On Android 10+ a background start needs "Display over other
+ *  apps"; without it we fall back to a high-priority notification that opens the shield. */
 object Blocker {
     private var lastAt = 0L
     private var lastPkg = ""
@@ -668,6 +669,13 @@ object Blocker {
         val i = Intent(c, BlockActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION)
             .putExtra("pkg", pkg).putExtra("mode", Live.mode)
-        try { c.startActivity(i) } catch (_: Exception) {}
+        val canStart = Build.VERSION.SDK_INT < 29 || Settings.canDrawOverlays(c)
+        if (canStart) { try { c.startActivity(i); return } catch (_: Exception) {} }
+        val label = try { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { pkg }
+        Notifs.post(c, Notifs.ID_BLOCK, Notifs.base(c, Notifs.CH_ALERT,
+            if (Live.mode == "driving") "Driving Mode on" else Store.s(c, "Padhai Mode on", "Study Mode on"),
+            Store.s(c, "$label abhi blocked hai.", "$label is blocked right now."))
+            .setContentIntent(Notifs.activity(c, i)).setAutoCancel(true).setTimeoutAfter(30_000)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH))
     }
 }

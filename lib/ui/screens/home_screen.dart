@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/brain.dart';
+import '../../core/i18n.dart';
 import '../../core/icon_schedule.dart';
 import '../../core/models.dart';
 import '../../state/app_state.dart';
@@ -197,12 +198,10 @@ class _QuickToggles extends StatelessWidget {
           ]),
         ),
         const Divider(height: 1, indent: 16, endIndent: 16),
-        SwitchListTile(
-          secondary: const Icon(Icons.chat_bubble_outline_rounded),
+        ListTile(
+          leading: const Icon(Icons.chat_bubble_outline_rounded),
           title: Text(t.s('Driving auto-reply', 'Driving auto-reply')),
-          subtitle: Text(cfg.autoReplyText, maxLines: 1, overflow: TextOverflow.ellipsis),
-          value: cfg.autoReply,
-          onChanged: (v) => s.update({'autoReply': v}),
+          subtitle: Text(T.liteNoAutoReply),
         ),
         const Divider(height: 1, indent: 16, endIndent: 16),
         SwitchListTile(

@@ -21,6 +21,7 @@ object Notifs {
     const val ID_SUGGEST = 3
     const val ID_NUDGE = 4
     const val ID_BOOT = 5
+    const val ID_BLOCK = 6
 
     fun channels(c: Context) {
         if (Build.VERSION.SDK_INT < 26) return

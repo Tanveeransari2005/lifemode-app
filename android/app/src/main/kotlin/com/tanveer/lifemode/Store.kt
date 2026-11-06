@@ -86,8 +86,6 @@ object Live {
     @Volatile var reason: String = ""
     @Volatile var manual: Boolean = false
     @Volatile var serviceRunning = false
-    @Volatile var autoReplyActive = false
-    @Volatile var autoReplyText = ""
     @Volatile var blockList: Set<String> = emptySet()
     @Volatile var pomodoroEndMs: Long = 0
     @Volatile var lastSnapshot: JSONObject = JSONObject()

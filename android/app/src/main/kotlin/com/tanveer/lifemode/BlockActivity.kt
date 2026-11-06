@@ -43,8 +43,8 @@ class BlockActivity : Activity() {
             setPadding(0, dp(20), 0, dp(8))
         })
         root.addView(TextView(this).apply {
-            text = if (driving) Store.s(this@BlockActivity, "$label abhi blocked hai. Road pe dhyan do, messages ka auto-reply ja raha hai.",
-                "$label is blocked right now. Eyes on the road; messages get an auto-reply.")
+            text = if (driving) Store.s(this@BlockActivity, "$label abhi blocked hai. Road pe dhyan do.",
+                "$label is blocked right now. Eyes on the road.")
             else Store.s(this@BlockActivity, "$label focus ke baad. Bas thoda aur padh lo!", "$label can wait until after focus. Almost there!")
             setTextColor(0xCCFFFFFF.toInt()); textSize = 17f; gravity = Gravity.CENTER
         })

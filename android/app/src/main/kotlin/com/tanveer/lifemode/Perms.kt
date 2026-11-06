@@ -31,7 +31,6 @@ object Perms {
     fun all(c: Context): Map<String, Boolean> {
         val nm = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val pm = c.getSystemService(Context.POWER_SERVICE) as PowerManager
-        val acc = Settings.Secure.getString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
         return mapOf(
             "notifications" to NotificationManagerCompat.from(c).areNotificationsEnabled(),
             "location" to g(c, Manifest.permission.ACCESS_FINE_LOCATION),
@@ -41,8 +40,6 @@ object Perms {
             "usage" to usage(c),
             "overlay" to (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(c)),
             "dnd" to (Build.VERSION.SDK_INT < 23 || nm.isNotificationPolicyAccessGranted),
-            "listener" to NotificationManagerCompat.getEnabledListenerPackages(c).contains(c.packageName),
-            "accessibility" to acc.contains(c.packageName + "/"),
             "mic" to g(c, Manifest.permission.RECORD_AUDIO),
             "battery" to (Build.VERSION.SDK_INT < 23 || pm.isIgnoringBatteryOptimizations(c.packageName)),
         )
@@ -64,8 +61,6 @@ object Perms {
             "usage" -> open(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
             "overlay" -> if (Build.VERSION.SDK_INT >= 23) open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg))
             "dnd" -> open(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-            "listener" -> open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            "accessibility" -> open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             "battery" -> if (Build.VERSION.SDK_INT >= 23) {
                 @Suppress("BatteryLife")
                 open(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
