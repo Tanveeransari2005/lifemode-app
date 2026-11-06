@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_desc">Optional. Lets LifeMode notice instantly when an app you blocked for Driving or Study opens, and show the "Mode on" screen. LifeMode only reads which app came to the front, never screen content, and nothing leaves your phone.</string>
+</resources>

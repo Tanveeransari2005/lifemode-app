@@ -1,0 +1,38 @@
+name: lifemode
+description: "LifeMode — ambient context app: your phone switches into Driving / Study / Sleep / Home mode by itself."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.4.2      # on-device timeline + suggestion log (no JNI)
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding/
+    - assets/mascot/
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 700
+
+dependency_overrides:
+  path_provider_android: 2.2.17
+  shared_preferences_android: 2.4.10
