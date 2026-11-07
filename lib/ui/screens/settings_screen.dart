@@ -282,9 +282,11 @@ class SettingsScreen extends StatelessWidget {
             ),
           ]),
         ),
+        SectionTitle(t.s('Crash log', 'Crash log')),
+        CrashLogCard(state: s),
         const SizedBox(height: 18),
         Center(
-          child: Text('LifeMode 1.0 · MIT · Tanveer Ansari', style: const TextStyle(fontSize: 12, color: LM.muted)),
+          child: Text('LifeMode 1.0.2 · MIT · Tanveer Ansari', style: const TextStyle(fontSize: 12, color: LM.muted)),
         ),
       ]),
     );
@@ -386,6 +388,60 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             ),
           ),
         ),
+      ]),
+    );
+  }
+}
+
+
+/// v1.0.2: shows crashes / errors recorded on this phone (nothing is uploaded).
+class CrashLogCard extends StatelessWidget {
+  const CrashLogCard({super.key, required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(listenable: state, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
+    final t = state.t;
+    final c = state.crash;
+    if (c.isEmpty) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.check_circle_outline_rounded),
+          title: Text(t.s('Koi crash nahi', 'No crashes recorded')),
+          subtitle: Text(t.s('Agar app band ho jaye, details yahan dikhengi.', 'If the app ever closes unexpectedly, details show here.')),
+          trailing: IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: state.refreshCrash),
+        ),
+      );
+    }
+    final lines = c.log.trim().split('\n');
+    final preview = lines.length > 14 ? lines.sublist(lines.length - 14).join('\n') : lines.join('\n');
+    return Card(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ListTile(
+          leading: Icon(c.fatal ? Icons.bug_report_rounded : Icons.info_outline_rounded,
+              color: c.fatal ? const Color(0xFFE03131) : null),
+          title: Text(c.fatal ? t.s('Pichhli baar app crash hui thi', 'The app crashed last time') : t.s('Kuch warnings', 'Some warnings')),
+          subtitle: Text(t.s('Ye log sirf is phone me hai. Share karke developer ko bhejo.',
+              'This log stays on this phone. Share it with the developer.')),
+        ),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(10),
+          constraints: const BoxConstraints(maxHeight: 220),
+          decoration: BoxDecoration(color: const Color(0xFFF3F2F8), borderRadius: BorderRadius.circular(10)),
+          child: SingleChildScrollView(
+            reverse: true,
+            child: SelectableText(preview, style: const TextStyle(fontFamily: 'monospace', fontSize: 10.5, height: 1.3)),
+          ),
+        ),
+        OverflowBar(alignment: MainAxisAlignment.end, children: [
+          TextButton.icon(
+              onPressed: state.shareCrashLog, icon: const Icon(Icons.ios_share_rounded), label: Text(t.s('Share', 'Share'))),
+          TextButton.icon(
+              onPressed: state.clearCrashLog, icon: const Icon(Icons.delete_outline_rounded), label: Text(t.s('Clear', 'Clear'))),
+        ]),
       ]),
     );
   }

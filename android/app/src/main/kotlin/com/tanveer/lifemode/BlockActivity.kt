@@ -5,7 +5,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
+import android.window.OnBackInvokedDispatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.Button
@@ -18,10 +20,15 @@ import android.widget.TextView
 class BlockActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        render()
+        try { render() } catch (t: Throwable) { CrashLog.note(this, "BlockActivity.render", t); finish(); return }
+        // targetSdk 36 (Android 16): predictive back is on by default and onBackPressed() is no
+        // longer called, so register the callback explicitly; back = go home, not into the app.
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { goHome() }
+        }
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); render() }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); try { render() } catch (t: Throwable) { CrashLog.note(this, "BlockActivity.render", t) } }
 
     private fun dp(v: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 

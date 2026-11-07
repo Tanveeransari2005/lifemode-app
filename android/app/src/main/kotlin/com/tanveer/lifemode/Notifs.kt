@@ -25,7 +25,7 @@ object Notifs {
 
     fun channels(c: Context) {
         if (Build.VERSION.SDK_INT < 26) return
-        val nm = c.getSystemService(NotificationManager::class.java)
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(NotificationChannel(CH_SERVICE, "Current mode", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Shows the active Life Mode and its quick actions"; setShowBadge(false)
         })
@@ -91,7 +91,8 @@ object Notifs {
     @Suppress("MissingPermission")
     fun post(c: Context, id: Int, b: NotificationCompat.Builder) {
         if (!canPost(c)) return
-        try { NotificationManagerCompat.from(c).notify(id, b.build()) } catch (_: SecurityException) {}
+        try { channels(c) } catch (_: Throwable) {} // channel must exist before notify
+        try { NotificationManagerCompat.from(c).notify(id, b.build()) } catch (t: Throwable) { CrashLog.note(c, "notify($id)", t) }
     }
 
     fun base(c: Context, ch: String, title: String, text: String) = NotificationCompat.Builder(c, ch)

@@ -65,6 +65,20 @@ abstract class Bridge {
   Future<void> shareText(String fileName, String text);
   Future<void> setIconSwitching(bool on);
   Future<void> openMaps();
+
+  /// v1.0.2 crash log: {log: String, safeMode: bool, fatal: bool}.
+  Future<CrashInfo> crashLog();
+  Future<void> clearCrashLog();
+  Future<void> exitSafeMode();
+  Future<void> logError(String text);
+}
+
+class CrashInfo {
+  final String log;
+  final bool safeMode;
+  final bool fatal;
+  const CrashInfo({this.log = '', this.safeMode = false, this.fatal = false});
+  bool get isEmpty => log.trim().isEmpty;
 }
 
 class NativeBridge implements Bridge {
@@ -133,6 +147,20 @@ class NativeBridge implements Bridge {
   Future<void> setIconSwitching(bool on) => _m.invokeMethod('iconSwitching', on);
   @override
   Future<void> openMaps() => _m.invokeMethod('openMaps');
+
+  @override
+  Future<CrashInfo> crashLog() async {
+    final m = await _m.invokeMapMethod<String, dynamic>('crashLog');
+    if (m == null) return const CrashInfo();
+    return CrashInfo(log: (m['log'] ?? '').toString(), safeMode: m['safeMode'] == true, fatal: m['fatal'] == true);
+  }
+
+  @override
+  Future<void> clearCrashLog() => _m.invokeMethod('clearCrashLog');
+  @override
+  Future<void> exitSafeMode() => _m.invokeMethod('exitSafeMode');
+  @override
+  Future<void> logError(String text) => _m.invokeMethod('logError', text);
 }
 
 class FakeBridge implements Bridge {
@@ -182,4 +210,15 @@ class FakeBridge implements Bridge {
   Future<void> setIconSwitching(bool on) async {}
   @override
   Future<void> openMaps() async {}
+
+  CrashInfo crash = const CrashInfo();
+  final errors = <String>[];
+  @override
+  Future<CrashInfo> crashLog() async => crash;
+  @override
+  Future<void> clearCrashLog() async => crash = const CrashInfo();
+  @override
+  Future<void> exitSafeMode() async => crash = CrashInfo(log: crash.log, fatal: crash.fatal);
+  @override
+  Future<void> logError(String text) async => errors.add(text);
 }

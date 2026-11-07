@@ -41,7 +41,7 @@
 
     <application
         android:label="LifeMode"
-        android:name="${applicationName}"
+        android:name=".LifeModeApp"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:allowBackup="false">
@@ -59,7 +59,9 @@
               android:resource="@style/NormalTheme" />
         </activity>
 
-        <!-- Time-of-day launcher icons. Exactly one is enabled at a time (IconSwitcher.kt). -->
+        <!-- Launcher entries. IconAfternoon is the default and the only alias enabled in the manifest.
+             Time-of-day switching is opt-in since 1.0.2 (IconSwitcher.kt); ensureLauncher() re-enables
+             the default if no alias is enabled, so the app can never disappear from the launcher. -->
         <activity-alias android:name=".IconMorning" android:targetActivity=".MainActivity" android:enabled="false"
             android:exported="true" android:icon="@mipmap/ic_launcher_morning" android:roundIcon="@mipmap/ic_launcher_morning" android:label="LifeMode">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>

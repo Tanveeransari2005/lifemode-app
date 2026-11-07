@@ -78,9 +78,16 @@ class ContextService : Service(), SensorEventListener {
         /** Deliver to the running service directly (no background-FGS-start
          *  restrictions); otherwise start it. */
         fun start(c: Context, action: String = ACTION_START, extra: String = "") {
-            instance?.let { svc -> svc.h.post { svc.handle(action, extra) }; return }
+            instance?.let { svc -> svc.h.post { svc.safeHandle(action, extra) }; return }
+            if (action == ACTION_STOP) return
+            if (CrashLog.safeMode(c)) return // last run crashed: never auto-start until the user says so
             val i = Intent(c, ContextService::class.java).setAction(action).putExtra("extra", extra)
-            try { ContextCompat.startForegroundService(c, i) } catch (_: Exception) {}
+            // Android 12+: ForegroundServiceStartNotAllowedException when called from the background.
+            try { ContextCompat.startForegroundService(c, i) } catch (t: Throwable) {
+                // Expected from background callers (WorkManager watchdog) on Android 12+: logcat only.
+                if (t.javaClass.simpleName.contains("NotAllowed")) android.util.Log.w("LifeMode", "FGS start refused", t)
+                else CrashLog.note(c, "startForegroundService($action)", t)
+            }
         }
         fun stop(c: Context) = c.stopService(Intent(c, ContextService::class.java))
     }
@@ -123,15 +130,34 @@ class ContextService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        goForeground()
-        if (!started) { started = true; Live.serviceRunning = true; setup() }
-        instance = this
-        val extra = intent?.getStringExtra("extra") ?: ""
-        if (intent?.action == ACTION_STOP) {
-            teardown(); ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY
+        // v1.0.2: every path here is guarded. A crash in this service kills the whole
+        // process, UI included ("LifeMode keeps stopping"), so nothing may escape.
+        val fg = try { goForeground() } catch (t: Throwable) { CrashLog.note(this, "goForeground", t); false }
+        if (!fg || intent?.action == ACTION_STOP || CrashLog.safeMode(this)) {
+            // Could not become a foreground service (or asked to stop): stop cleanly instead of
+            // tripping ForegroundServiceDidNotStartInTimeException 10 s later.
+            try { if (started) teardown() } catch (_: Throwable) {}
+            try { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) } catch (_: Throwable) {}
+            stopSelf(); return START_NOT_STICKY
         }
-        handle(intent?.action ?: ACTION_TICK, extra)
+        instance = this
+        if (!started) {
+            started = true; Live.serviceRunning = true
+            try { setup() } catch (t: Throwable) { CrashLog.note(this, "service setup", t) }
+        }
+        safeHandle(intent?.action ?: ACTION_TICK, intent?.getStringExtra("extra") ?: "")
         return START_STICKY
+    }
+
+    /** Android 15+ (API 35): a time-limited FGS type (dataSync) must stop when told to,
+     *  or the system crashes the app. We only use dataSync on API 29-33, but be safe. */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        try { teardown() } catch (_: Throwable) {}
+        stopSelf()
+    }
+
+    fun safeHandle(action: String, extra: String) {
+        try { handle(action, extra) } catch (t: Throwable) { CrashLog.note(this, "service handle($action)", t) }
     }
 
     fun handle(action: String, extra: String) {
@@ -155,24 +181,28 @@ class ContextService : Service(), SensorEventListener {
     // ---------------------------------------------------------------- foreground
     private var cardNotif: android.app.Notification? = null
 
-    private fun goForeground() {
+    /** Picks the foreground-service type from what is actually granted *now*:
+     *  - location only with a location permission AND either the UI on screen or background
+     *    location (Android 14+ throws SecurityException otherwise, e.g. at BOOT);
+     *  - else specialUse on 34+ (needs PROPERTY_SPECIAL_USE_FGS_SUBTYPE, declared), dataSync on 29-33.
+     *  Tries each candidate; returns false if none worked. */
+    private fun goForeground(): Boolean {
         val n = cardNotif ?: Notifs.base(this, Notifs.CH_SERVICE, "LifeMode", Store.s(this, "Context dekh rahi hoon…", "Watching context…"))
             .setOngoing(true).setOnlyAlertOnce(true).setPriority(NotificationCompat.PRIORITY_LOW).build()
         val hasLoc = granted(Manifest.permission.ACCESS_FINE_LOCATION) || granted(Manifest.permission.ACCESS_COARSE_LOCATION)
-        var type = 0
+        val bgLoc = Build.VERSION.SDK_INT < 29 || granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        val candidates = ArrayList<Int>()
         if (Build.VERSION.SDK_INT >= 29) {
-            type = if (hasLoc) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            else if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (hasLoc && (IconSwitcher.appVisible || bgLoc || Build.VERSION.SDK_INT < 34)) candidates.add(ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            candidates.add(if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else candidates.add(0)
+        for (type in candidates) {
+            try {
+                ServiceCompat.startForeground(this, Notifs.ID_SERVICE, n, type)
+                return true
+            } catch (t: Throwable) { CrashLog.note(this, "startForeground(type=$type) sdk=${Build.VERSION.SDK_INT}", t) }
         }
-        try {
-            ServiceCompat.startForeground(this, Notifs.ID_SERVICE, n, type)
-        } catch (e: Exception) {
-            // e.g. started from BOOT without background-location: run without the location type.
-            val fallback = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            else if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
-            try { ServiceCompat.startForeground(this, Notifs.ID_SERVICE, n, fallback) } catch (_: Exception) {}
-        }
+        return false
     }
 
     private fun granted(p: String) = ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
@@ -180,30 +210,39 @@ class ContextService : Service(), SensorEventListener {
     // ---------------------------------------------------------------- setup
     private val screenRx = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            try {
             val on = i.action == Intent.ACTION_SCREEN_ON || i.action == Intent.ACTION_USER_PRESENT
             if (on != screenOn) { screenOn = on; screenSince = System.currentTimeMillis() }
             if (i.action == Intent.ACTION_SCREEN_ON) onPickup()
             if (i.action != Intent.ACTION_USER_PRESENT) tick()
+            } catch (t: Throwable) { CrashLog.note(c, "screenRx", t) }
         }
     }
 
     private val locCb = object : LocationCallback() {
-        override fun onLocationResult(r: LocationResult) { r.lastLocation?.let { onLocation(it) } }
+        override fun onLocationResult(r: LocationResult) { try { r.lastLocation?.let { onLocation(it) } } catch (t: Throwable) { CrashLog.note(this@ContextService, "onLocation", t) } }
+    }
+
+    private inline fun guard(where: String, block: () -> Unit) {
+        try { block() } catch (t: Throwable) { CrashLog.note(this, where, t) }
     }
 
     private fun setup() {
-        val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }
-        ContextCompat.registerReceiver(this, screenRx, f, ContextCompat.RECEIVER_NOT_EXPORTED)
-        screenOn = (getSystemService(POWER_SERVICE) as android.os.PowerManager).isInteractive
-        BgEngine.start(this) { tick() }
-        registerActivityTransitions()
-        registerGeofence()
-        updateLocationRequest(false)
+        guard("registerReceiver(screen)") {
+            val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) }
+            // System broadcasts; the flag is mandatory for targetSdk 34+.
+            ContextCompat.registerReceiver(this, screenRx, f, ContextCompat.RECEIVER_EXPORTED)
+        }
+        guard("isInteractive") { screenOn = (getSystemService(POWER_SERVICE) as android.os.PowerManager).isInteractive }
+        guard("BgEngine.start") { BgEngine.start(this) { tick() } }
+        guard("activityTransitions") { registerActivityTransitions() }
+        guard("geofence") { registerGeofence() }
+        guard("locationRequest") { updateLocationRequest(false) }
         h.post(tickLoop)
         h.post(pollLoop)
         val left = Live.pomodoroEndMs - System.currentTimeMillis()
         if (left > 0) h.postDelayed(pomodoroDone, left)
-        IconSwitcher.schedule(this)
+        guard("IconSwitcher.schedule") { IconSwitcher.schedule(this) }
     }
 
     private fun teardown() {
@@ -212,12 +251,12 @@ class ContextService : Service(), SensorEventListener {
         try { unregisterReceiver(screenRx) } catch (_: Exception) {}
         try { sm.unregisterListener(this) } catch (_: Exception) {}
         try { LocationServices.getFusedLocationProviderClient(this).removeLocationUpdates(locCb) } catch (_: Exception) {}
-        exitMode(currentMode)
+        try { exitMode(currentMode) } catch (_: Throwable) {}
         Live.blockList = emptySet()
-        pushStatus()
+        try { pushStatus() } catch (_: Throwable) {}
     }
 
-    override fun onDestroy() { if (Live.serviceRunning) teardown(); instance = null; super.onDestroy() }
+    override fun onDestroy() { try { if (Live.serviceRunning) teardown() } catch (_: Throwable) {}; instance = null; super.onDestroy() }
 
     @SuppressLint("MissingPermission")
     private fun registerActivityTransitions() {
@@ -342,7 +381,7 @@ class ContextService : Service(), SensorEventListener {
     } catch (_: Exception) { "" }
 
     private fun battery(): Pair<Int, Boolean> {
-        val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return 100 to false
+        val i = try { ContextCompat.registerReceiver(this, null, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_EXPORTED) } catch (_: Throwable) { null } ?: return 100 to false
         val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, 100); val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
         val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         return (level * 100 / scale.coerceAtLeast(1)) to plugged
@@ -381,9 +420,10 @@ class ContextService : Service(), SensorEventListener {
     /** (foreground package, app switches in the last 10 min) from UsageStats. */
     private fun usage(windowMs: Long = 600_000L): Pair<String, Int> {
         if (!usageOk()) return "" to 0
-        val um = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
+        val um = getSystemService(USAGE_STATS_SERVICE) as? UsageStatsManager ?: return "" to 0
         val now = System.currentTimeMillis()
-        val ev = um.queryEvents(now - windowMs, now)
+        // queryEvents can return null (e.g. user still locked after boot).
+        val ev: UsageEvents = try { um.queryEvents(now - windowMs, now) } catch (_: Throwable) { null } ?: return "" to 0
         val e = UsageEvents.Event()
         var last = ""; var switches = 0
         val resumed = if (Build.VERSION.SDK_INT >= 29) UsageEvents.Event.ACTIVITY_RESUMED else @Suppress("DEPRECATION") UsageEvents.Event.MOVE_TO_FOREGROUND
@@ -398,6 +438,10 @@ class ContextService : Service(), SensorEventListener {
     private val tickLoop = object : Runnable { override fun run() { tick(); h.postDelayed(this, TICK_MS) } }
 
     private fun tick() {
+        try { tickInner() } catch (t: Throwable) { CrashLog.note(this, "tick", t) }
+    }
+
+    private fun tickInner() {
         val cfg = Store.config(this)
         val now = System.currentTimeMillis()
         val dt = if (lastTickAt == 0L) 0L else (now - lastTickAt).coerceIn(0, 120_000)
@@ -455,7 +499,9 @@ class ContextService : Service(), SensorEventListener {
         if (!screenOn) keepTickingWhileIdle()
         Live.lastSnapshot = snap
         val payload = JSONObject().put("snapshot", snap).put("config", cfg).toString()
-        BgEngine.tick(payload) { res -> if (res != null) apply(JSONObject(res), cfg) else pushStatus() }
+        BgEngine.tick(payload) { res ->
+            try { if (res != null) apply(JSONObject(res), cfg) else pushStatus() } catch (t: Throwable) { CrashLog.note(this, "apply", t) }
+        }
     }
 
     /** With the screen off the CPU sleeps and Handler ticks stop; a while-idle
@@ -617,7 +663,7 @@ class ContextService : Service(), SensorEventListener {
         }
     }
 
-    private val pomodoroDone = Runnable { stopPomodoro(true); tick() }
+    private val pomodoroDone = Runnable { try { stopPomodoro(true) } catch (_: Throwable) {}; tick() }
 
     private fun onPickup() {
         val now = System.currentTimeMillis()
@@ -642,8 +688,10 @@ class ContextService : Service(), SensorEventListener {
     private val pollLoop = object : Runnable {
         override fun run() {
             if (Live.blockList.isNotEmpty() && screenOn) {
-                val (fg, _) = usage(60_000L)
-                checkBlocked(this@ContextService, fg)
+                try {
+                    val (fg, _) = usage(60_000L)
+                    checkBlocked(this@ContextService, fg)
+                } catch (t: Throwable) { CrashLog.note(this@ContextService, "pollLoop", t) }
             }
             h.postDelayed(this, POLL_MS)
         }

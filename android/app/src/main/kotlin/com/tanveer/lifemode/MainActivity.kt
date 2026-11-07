@@ -22,13 +22,14 @@ class MainActivity : FlutterActivity() {
     private val main = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
-        Notifs.channels(this)
+        // v1.0.2: plugin registration and our own native init must never stop the UI from opening.
+        try { super.configureFlutterEngine(flutterEngine) } catch (t: Throwable) { CrashLog.note(this, "plugin registration", t) }
+        try { Notifs.channels(this) } catch (t: Throwable) { CrashLog.note(this, "notification channels", t) }
         val m = flutterEngine.dartExecutor.binaryMessenger
         EventChannel(m, "lifemode/status").setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(args: Any?, sink: EventChannel.EventSink) {
                 Live.statusSink = { s -> main.post { try { sink.success(s) } catch (_: Exception) {} } }
-                sink.success(Live.status(this@MainActivity))
+                try { sink.success(Live.status(this@MainActivity)) } catch (t: Throwable) { CrashLog.note(this@MainActivity, "status stream", t) }
             }
             override fun onCancel(args: Any?) { Live.statusSink = null }
         })
@@ -40,13 +41,22 @@ class MainActivity : FlutterActivity() {
                         val old = Store.config(this)
                         Store.saveConfig(this, call.arguments as String)
                         val cfg = Store.config(this)
-                        if (old.optBoolean("iconSwitching", true) != cfg.optBoolean("iconSwitching", true)) IconSwitcher.apply(this)
+                        if (old.optBoolean("iconSwitching", false) != cfg.optBoolean("iconSwitching", false)) IconSwitcher.apply(this)
                         if (Live.serviceRunning) ContextService.start(this, ContextService.ACTION_REFRESH)
                         result.success(null)
                     }
                     "permissions" -> result.success(Perms.all(this))
                     "requestPermission" -> { Perms.request(this, call.arguments as String); result.success(null) }
-                    "startService" -> { ContextService.start(this); IconSwitcher.schedule(this); result.success(null) }
+                    "startService" -> {
+                        // Safe mode (crashed last time): don't auto-start; the UI shows the crash log instead.
+                        val safe = CrashLog.safeMode(this)
+                        if (!safe) { ContextService.start(this); IconSwitcher.schedule(this) }
+                        result.success(!safe)
+                    }
+                    "crashLog" -> result.success(mapOf("log" to CrashLog.read(this), "safeMode" to CrashLog.safeMode(this), "fatal" to CrashLog.hasFatal(this)))
+                    "clearCrashLog" -> { CrashLog.clear(this); result.success(null) }
+                    "exitSafeMode" -> { CrashLog.exitSafeMode(this); result.success(null) }
+                    "logError" -> { CrashLog.dartError(this, call.arguments as? String ?: ""); result.success(null) }
                     "stopService" -> { ContextService.start(this, ContextService.ACTION_STOP); result.success(null) }
                     "status" -> result.success(Live.status(this))
                     "tickNow" -> { if (Live.serviceRunning) ContextService.start(this, ContextService.ACTION_TICK); result.success(null) }
@@ -63,14 +73,16 @@ class MainActivity : FlutterActivity() {
                     "iconSwitching" -> { IconSwitcher.apply(this); result.success(IconSwitcher.current(this)) }
                     else -> result.notImplemented()
                 }
-            } catch (e: Exception) { result.error("native", e.message, null) }
+            } catch (e: Throwable) { CrashLog.note(this, "channel ${call.method}", e); result.error("native", e.message, null) }
         }
     }
 
     override fun onResume() { super.onResume(); IconSwitcher.appVisible = true }
     override fun onPause() {
         super.onPause(); IconSwitcher.appVisible = false
-        if (Store.prefs(this).getBoolean("iconPending", false)) main.postDelayed({ if (!IconSwitcher.appVisible) IconSwitcher.apply(this) }, 1500)
+        try {
+            if (Store.prefs(this).getBoolean("iconPending", false)) main.postDelayed({ if (!IconSwitcher.appVisible) IconSwitcher.apply(this) }, 1500)
+        } catch (t: Throwable) { CrashLog.note(this, "onPause", t) }
     }
 
     private fun launchableApps(): List<Map<String, String>> {
@@ -101,8 +113,9 @@ class MainActivity : FlutterActivity() {
         val dir = File(cacheDir, "export").apply { mkdirs() }
         val f = File(dir, name); f.writeText(text)
         val uri: Uri = FileProvider.getUriForFile(this, "$packageName.files", f)
-        val send = Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_STREAM, uri)
+        val mime = if (name.endsWith(".json")) "application/json" else "text/plain"
+        val send = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(Intent.createChooser(send, "LifeMode export"))
+        startActivity(Intent.createChooser(send, "LifeMode"))
     }
 }

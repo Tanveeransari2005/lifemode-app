@@ -50,6 +50,10 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 32),
             sliver: SliverList.list(children: [
               const SizedBox(height: 16),
+              if (s.crash.safeMode) ...[
+                SafeModeBanner(state: s),
+                const SizedBox(height: 12),
+              ],
               ModeCard(
                   t: t,
                   mode: live.mode,
@@ -207,11 +211,40 @@ class _QuickToggles extends StatelessWidget {
         SwitchListTile(
           secondary: const Icon(Icons.wb_twilight_rounded),
           title: Text(t.s('Time ke saath icon badle', 'Icon changes with time of day')),
-          subtitle: Text(t.s('06:00 / 12:00 / 17:00 / 20:00', '06:00 / 12:00 / 17:00 / 20:00')),
+          subtitle: Text(t.s('06:00 / 12:00 / 17:00 / 20:00. Kuch launchers home-screen icon hata dete hain.',
+              '06:00 / 12:00 / 17:00 / 20:00. Some launchers drop the home-screen icon.')),
           value: cfg.iconSwitching,
           onChanged: (v) => s.update({'iconSwitching': v}).then((_) => s.bridge.setIconSwitching(v)),
         ),
       ]),
+    );
+  }
+}
+
+
+/// v1.0.2: shown after a crash. The context engine was not auto-started this time.
+class SafeModeBanner extends StatelessWidget {
+  const SafeModeBanner({super.key, required this.state});
+  final AppState state;
+  @override
+  Widget build(BuildContext context) {
+    final t = state.t;
+    return Card(
+      color: const Color(0xFFFFF4E5),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(t.s('Safe mode: pichhli baar LifeMode crash hui', 'Safe mode: LifeMode crashed last time'),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(t.s('Engine abhi band hai. Crash log Settings me hai.', 'The engine is paused. The crash log is in Settings.'),
+              style: const TextStyle(fontSize: 13)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(onPressed: state.retryEngine, child: Text(t.s('Engine dobara chalao', 'Start engine again'))),
+          ),
+        ]),
+      ),
     );
   }
 }

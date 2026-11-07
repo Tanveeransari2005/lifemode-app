@@ -52,6 +52,12 @@ android {
 
     buildTypes {
         release {
+            // v1.0.2: no R8 shrinking/obfuscation. Flutter plugins, WorkManager workers and
+            // receivers are reached by class name / JNI; minifying gained little and is a launch-crash
+            // risk. (proguard-rules.pro is kept for if minify is ever turned back on.)
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (keystorePropertiesFile.exists())
                 signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }

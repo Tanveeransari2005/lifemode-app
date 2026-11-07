@@ -22,6 +22,9 @@ object Receivers {
 /** Activity Recognition Transition API -> service. */
 class ActivityRx : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        try { handle(c, i) } catch (t: Throwable) { CrashLog.note(c, "ActivityRx", t) }
+    }
+    private fun handle(c: Context, i: Intent) {
         if (!ActivityTransitionResult.hasResult(i)) return
         val events = ActivityTransitionResult.extractResult(i)?.transitionEvents ?: return
         val ev = events.lastOrNull { it.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER }
@@ -40,6 +43,9 @@ class ActivityRx : BroadcastReceiver() {
 
 class GeofenceRx : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        try { handle(c, i) } catch (t: Throwable) { CrashLog.note(c, "GeofenceRx", t) }
+    }
+    private fun handle(c: Context, i: Intent) {
         val ev = GeofencingEvent.fromIntent(i) ?: return
         if (ev.hasError()) return
         val t = when (ev.geofenceTransition) {
@@ -54,16 +60,19 @@ class GeofenceRx : BroadcastReceiver() {
 /** Restart after reboot / app update (if the user left LifeMode on). */
 class BootRx : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
-        val cfg = Store.config(c)
-        IconSwitcher.schedule(c)
-        if (!cfg.optBoolean("onboarded", false) || !cfg.optBoolean("engineOn", true)) return
-        ContextService.start(c)
+        try {
+            IconSwitcher.ensureLauncher(c)
+            val cfg = Store.config(c)
+            IconSwitcher.schedule(c)
+            if (!cfg.optBoolean("onboarded", false) || !cfg.optBoolean("engineOn", true)) return
+            ContextService.start(c) // BOOT_COMPLETED / MY_PACKAGE_REPLACED are exempt from bg-FGS limits
+        } catch (t: Throwable) { CrashLog.note(c, "BootRx ${i.action}", t) }
     }
 }
 
 /** While-idle alarm -> tick (service already running in this process). */
 class TickRx : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
-        ContextService.instance?.let { svc -> svc.h.post { svc.handle(ContextService.ACTION_TICK, "") } }
+        ContextService.instance?.let { svc -> svc.h.post { svc.safeHandle(ContextService.ACTION_TICK, "") } }
     }
 }

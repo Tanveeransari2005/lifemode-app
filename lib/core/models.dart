@@ -62,7 +62,7 @@ class LifeConfig {
   const LifeConfig({
     this.lang = 'hi',
     this.engineOn = true,
-    this.iconSwitching = true,
+    this.iconSwitching = false, // opt-in since 1.0.2
     this.sensors = defaultSensors,
     this.incognitoUntilMs = 0,
     this.overrideMode = '',
@@ -144,7 +144,7 @@ class LifeConfig {
     return LifeConfig(
       lang: j['lang'] == 'en' ? 'en' : 'hi',
       engineOn: j['engineOn'] != false,
-      iconSwitching: j['iconSwitching'] != false,
+      iconSwitching: j['iconSwitching'] == true,
       sensors: sens,
       incognitoUntilMs: i(j['incognitoUntilMs'], 0),
       overrideMode: (j['overrideMode'] ?? '').toString(),

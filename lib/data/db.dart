@@ -135,3 +135,35 @@ class MemoryLifeStore implements LifeStore {
     sugg.clear();
   }
 }
+
+
+/// v1.0.2: lets the UI start before the database is open. Opens [open] once with a
+/// timeout; if that fails, falls back to an in-memory store so nothing ever blocks launch.
+class DeferredLifeStore implements LifeStore {
+  DeferredLifeStore(Future<LifeStore> Function() open, {Duration timeout = const Duration(seconds: 6)})
+      : _store = _openSafely(open, timeout);
+  final Future<LifeStore> _store;
+
+  static Future<LifeStore> _openSafely(Future<LifeStore> Function() open, Duration timeout) async {
+    try {
+      return await open().timeout(timeout);
+    } catch (_) {
+      return MemoryLifeStore();
+    }
+  }
+
+  @override
+  Future<void> logMode(ModeEvent e) async => (await _store).logMode(e);
+  @override
+  Future<void> logSuggestion(int atMs, Suggestion s) async => (await _store).logSuggestion(atMs, s);
+  @override
+  Future<List<ModeEvent>> eventsSince(int ms) async => (await _store).eventsSince(ms);
+  @override
+  Future<RuleHistory> ruleHistory() async => (await _store).ruleHistory();
+  @override
+  Future<List<int>> homeArrivals({int days = 14}) async => (await _store).homeArrivals(days: days);
+  @override
+  Future<String> exportJson() async => (await _store).exportJson();
+  @override
+  Future<void> deleteAll() async => (await _store).deleteAll();
+}
